@@ -5,9 +5,11 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"log"
-	"runtime"
+	"os"
+	// "runtime"
 	"time"
 
+	"Bittorrent-client/bitfield"
 	"Bittorrent-client/client"
 	"Bittorrent-client/message"
 	"Bittorrent-client/peers"
@@ -28,6 +30,8 @@ type Torrent struct {
 	PieceLength int
 	Length      int
 	Name        string
+	File 		*os.File
+	Bitfield 	bitfield.Bitfield
 }
 
 type pieceWork struct {
@@ -90,7 +94,6 @@ func attemptDownloadPiece(c *client.Client, pw *pieceWork) ([]byte, error) {
 	}
 
 	// Setting a deadline helps get unresponsive peers unstuck.
-	// 30 seconds is more than enough time to download a 262 KB piece
 	c.Conn.SetDeadline(time.Now().Add(30 * time.Second))
 	defer c.Conn.SetDeadline(time.Time{}) // Disable the deadline
 
@@ -183,14 +186,35 @@ func (t *Torrent) calculatePieceSize(index int) int {
 }
 
 // Download downloads the torrent. This stores the entire file in memory.
-func (t *Torrent) Download() ([]byte, error) {
+func (t *Torrent) Download() error {
 	log.Println("Starting download for", t.Name)
 	// Init queues for workers to retrieve work and send results
 	workQueue := make(chan *pieceWork, len(t.PieceHashes))
 	results := make(chan *pieceResult)
+	completePieces := 0
 	for index, hash := range t.PieceHashes {
 		length := t.calculatePieceSize(index)
-		workQueue <- &pieceWork{index, hash, length}
+		start, _ := t.calculateBoundsForPiece(index)
+		pieceWork := pieceWork{index, hash, length}
+
+		SinglePiece := make([]byte , length)
+		_, err := t.File.ReadAt(SinglePiece, int64(start))
+
+		if err != nil{
+			return err
+		}
+
+		integrity_error := checkIntegrity(&pieceWork, SinglePiece)
+
+		if integrity_error != nil {
+			workQueue <- &pieceWork
+		} else {
+			completePieces ++
+			t.Bitfield.SetPiece(index)
+		}
+
+
+		
 	}
 
 	// Start workers
@@ -198,20 +222,24 @@ func (t *Torrent) Download() ([]byte, error) {
 		go t.startDownloadWorker(peer, workQueue, results)
 	}
 
-	// Collect results into a buffer until full
-	buf := make([]byte, t.Length)
-	donePieces := 0
-	for donePieces < len(t.PieceHashes) {
-		res := <-results
-		begin, end := t.calculateBoundsForPiece(res.index)
-		copy(buf[begin:end], res.buf)
-		donePieces++
 
-		percent := float64(donePieces) / float64(len(t.PieceHashes)) * 100
-		numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
-		log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, numWorkers)
+	// donePieces := 0
+	for completePieces < len(t.PieceHashes) {
+		res := <-results
+		begin, _ := t.calculateBoundsForPiece(res.index)
+
+		_, err := t.File.WriteAt(res.buf, int64(begin))
+		if err != nil{
+			return err
+		}
+		completePieces++
+
+		percent := float64(completePieces) / float64(len(t.PieceHashes)) * 100
+		// numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
+		log.Printf("(%0.2f%%) Downloaded piece #%d \n", percent, res.index)
 	}
+	log.Printf("Download Finished, you can find the file in the current directory.")
 	close(workQueue)
 
-	return buf, nil
+	return nil
 }

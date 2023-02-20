@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"time"
-
 	"Bittorrent-client/bitfield"
 	"Bittorrent-client/peers"
 	"Bittorrent-client/handshake"
@@ -38,7 +37,7 @@ func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Han
 		return nil, err
 	}
 	if !bytes.Equal(res.InfoHash[:], infohash[:]) {
-		return nil, fmt.Errorf("Expected infohash %x but got %x", res.InfoHash, infohash)
+		return nil, fmt.Errorf("File Mismatch: expected infohash %x but got %x", res.InfoHash, infohash)
 	}
 	return res, nil
 }
