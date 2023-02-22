@@ -58,7 +58,7 @@ func (state *pieceProgress) readMessage() error {
 	if err != nil {
 		return err
 	}
-
+	
 	if msg == nil { // keep-alive
 		return nil
 	}
