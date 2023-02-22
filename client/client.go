@@ -35,13 +35,13 @@ type Peer struct {
 func Unmarshal() ([]Peer, error) {
 	peers := make([]Peer, 1)
 	peer := make([]byte, 4)
-	peer[0] = 192
-	peer[1] = 168
-	peer[2] = 63
-	peer[3] = 30
+	peer[0] = 127
+	peer[1] = 0
+	peer[2] = 0
+	peer[3] = 1
 
 	peers[0].IP = net.IP(peer)
-	peers[0].Port = 5858
+	peers[0].Port = 8080
     return peers, nil
 }
 
@@ -82,7 +82,7 @@ func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Han
 	return res, nil
 }
 
-func recvBitfield(conn net.Conn) (bitfield.Bitfield, error) {
+func getBitField(conn net.Conn) (bitfield.Bitfield, error) {
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	defer conn.SetDeadline(time.Time{}) // Disable the deadline
 
@@ -118,7 +118,7 @@ func New(peer Peer, peerID, infoHash [20]byte) (*Client, error) {
 		return nil, err
 	}
 
-	bf, err := recvBitfield(conn)
+	bf, err := getBitField(conn)
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -126,7 +126,7 @@ func New(peer Peer, peerID, infoHash [20]byte) (*Client, error) {
 
 	return &Client{
 		Conn:     conn,
-		Choked:   true,
+		Choked:   false,
 		Bitfield: bf,
 		peer:     peer,
 		infoHash: infoHash,
@@ -134,43 +134,13 @@ func New(peer Peer, peerID, infoHash [20]byte) (*Client, error) {
 	}, nil
 }
 
-// Read reads and consumes a message from the connection
 func (c *Client) Read() (*message.Message, error) {
 	msg, err := message.Read(c.Conn)
 	return msg, err
 }
 
-// SendRequest sends a Request message to the peer
 func (c *Client) SendRequest(index, begin, length int) error {
 	req := message.FormatRequest(index, begin, length)
 	_, err := c.Conn.Write(req.Serialize())
-	return err
-}
-
-// SendInterested sends an Interested message to the peer
-func (c *Client) SendInterested() error {
-	msg := message.Message{ID: message.MsgInterested}
-	_, err := c.Conn.Write(msg.Serialize())
-	return err
-}
-
-// SendNotInterested sends a NotInterested message to the peer
-func (c *Client) SendNotInterested() error {
-	msg := message.Message{ID: message.MsgNotInterested}
-	_, err := c.Conn.Write(msg.Serialize())
-	return err
-}
-
-// SendUnchoke sends an Unchoke message to the peer
-func (c *Client) SendUnchoke() error {
-	msg := message.Message{ID: message.MsgUnchoke}
-	_, err := c.Conn.Write(msg.Serialize())
-	return err
-}
-
-// SendHave sends a Have message to the peer
-func (c *Client) SendHave(index int) error {
-	msg := message.FormatHave(index)
-	_, err := c.Conn.Write(msg.Serialize())
 	return err
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"Bittorrent-client/bitfield"
@@ -62,18 +63,7 @@ func (state *pieceProgress) readMessage() error {
 		return nil
 	}
 
-	switch msg.ID {
-	case message.MsgUnchoke:
-		state.client.Choked = false
-	case message.MsgChoke:
-		state.client.Choked = true
-	case message.MsgHave:
-		index, err := message.ParseHave(msg)
-		if err != nil {
-			return err
-		}
-		state.client.Bitfield.SetPiece(index)
-	case message.MsgPiece:
+	if msg.ID == message.MsgPiece {
 		n, err := message.ParsePiece(state.index, state.buf, msg)
 		if err != nil {
 			return err
@@ -140,9 +130,6 @@ func (t *Torrent) startDownloader(peer client.Peer, workQueue chan *pieceWork, r
 	defer c.Conn.Close()
 	log.Printf("Completed handshake with %s\n", peer.IP)
 
-	c.SendUnchoke()
-	c.SendInterested()
-
 	for pw := range workQueue {
 		if !c.Bitfield.HasPiece(pw.index) {
 			workQueue <- pw // Put piece back on the queue
@@ -164,7 +151,6 @@ func (t *Torrent) startDownloader(peer client.Peer, workQueue chan *pieceWork, r
 			continue
 		}
 
-		c.SendHave(pw.index)
 		results <- &pieceResult{pw.index, buf}
 	}
 }
@@ -190,6 +176,7 @@ func (t *Torrent) Download() error {
 	workQueue := make(chan *pieceWork, len(t.PieceHashes))
 	results := make(chan *pieceResult)
 	completePieces := 0
+	restore := false
 	for index, hash := range t.PieceHashes {
 		length := t.calculatePieceSize(index)
 		start, _ := t.calculateBoundsForPiece(index)
@@ -207,6 +194,7 @@ func (t *Torrent) Download() error {
 		if integrity_error != nil {
 			workQueue <- &pieceWork
 		} else {
+			restore = true
 			completePieces ++
 			t.Bitfield.SetPiece(index)
 		}
@@ -220,7 +208,10 @@ func (t *Torrent) Download() error {
 		go t.startDownloader(peer, workQueue, results)
 	}
 
-
+	if (restore) {
+		log.Printf("Download is Resuming from:  %0.2f%%", float64(completePieces) / float64(len(t.PieceHashes)) * 100)
+		
+	}
 	for completePieces < len(t.PieceHashes) {
 		res := <-results
 		begin, _ := t.calculateBoundsForPiece(res.index)
@@ -235,9 +226,10 @@ func (t *Torrent) Download() error {
 		percent := float64(completePieces) / float64(len(t.PieceHashes)) * 100
 		// numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
 
-		log.Printf("\rOn %0.2f%%", percent)
-		log.Printf("downloaded piece # \033[2K\r%d \n", res.index)
+		fmt.Printf("\r Download Progress: %s  %0.2f%%",strings.Repeat("#", int(percent/10)), percent)
+
 	}
+
 	log.Printf("Download Finished!!!, You can find your downloaded file in the current directory.")
 	close(workQueue)
 

@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"os"
-	"Bittorrent-client/torrentfile"
+	"Bittorrent-client/torrent"
 )
 
 func main() {
