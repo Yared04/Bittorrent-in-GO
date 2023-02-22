@@ -12,15 +12,6 @@ import (
 	"time"
 )
 
-// A Client is a TCP connection with a peer
-type Client struct {
-	Conn     net.Conn
-	Choked   bool
-	Bitfield bitfield.Bitfield
-	peer     Peer
-	infoHash [20]byte
-	peerID   [20]byte
-}
 type PeerID [20]byte
 
 var prefix = []byte("-P00001-")
@@ -31,14 +22,25 @@ type Peer struct {
     Port uint16
 }
 
+// A Client is a TCP connection with a peer
+type Client struct {
+	Conn     net.Conn
+	Choked   bool
+	Bitfield bitfield.Bitfield
+	peer     Peer
+	infoHash [20]byte
+	peerID   [20]byte
+}
+
+
 // Unmarshal returns the seeders as an array of peers(ip:port)
 func Unmarshal() ([]Peer, error) {
 	peers := make([]Peer, 1)
 	peer := make([]byte, 4)
-	peer[0] = 127
-	peer[1] = 0
-	peer[2] = 0
-	peer[3] = 1
+	peer[0] = 192
+	peer[1] = 168
+	peer[2] = 43
+	peer[3] = 30
 
 	peers[0].IP = net.IP(peer)
 	peers[0].Port = 8080
