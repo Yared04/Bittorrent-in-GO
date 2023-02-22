@@ -6,6 +6,28 @@ import (
 	"io"
 )
 
+type Bitfield []byte
+
+func (bf Bitfield) HasPiece(index int) bool {
+	byteIndex := index / 8
+	offset := index % 8
+	if byteIndex < 0 || byteIndex >= len(bf) {
+		return false
+	}
+	return bf[byteIndex]>>uint(7-offset)&1 != 0
+}
+
+func (bf Bitfield) SetPiece(index int) {
+	byteIndex := index / 8
+	offset := index % 8
+
+	if byteIndex < 0 || byteIndex >= len(bf) {
+		return
+	}
+	bf[byteIndex] |= 1 << uint(7 - offset)
+}
+
+
 type messageID uint8
 
 const (
@@ -60,7 +82,7 @@ func (m *Message) Serialize() []byte {
 	if m == nil {
 		return make([]byte, 4)
 	}
-	length := uint32(len(m.Payload) + 1) // +1 for id
+	length := uint32(len(m.Payload) + 1) 
 	buf := make([]byte, 4+length)
 	binary.BigEndian.PutUint32(buf[0:4], length)
 	buf[4] = byte(m.ID)
@@ -76,7 +98,6 @@ func Read(r io.Reader) (*Message, error) {
 	}
 	length := binary.BigEndian.Uint32(lengthBuf)
 
-	// keep-alive message
 	if length == 0 {
 		return nil, nil
 	}

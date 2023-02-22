@@ -9,8 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"Bittorrent-client/bitfield"
-	"Bittorrent-client/client"
+	"Bittorrent-client/seeder"
 	"Bittorrent-client/message"
 )
 
@@ -22,7 +21,7 @@ const MaxBacklog = 5
 
 // Torrent holds data required to download a torrent from a list of peers
 type Torrent struct {
-	Peers      []client.Peer
+	Peers      []seeder.Peer
 	PeerID      [20]byte
 	InfoHash    [20]byte
 	PieceHashes [][20]byte
@@ -30,7 +29,7 @@ type Torrent struct {
 	Length      int
 	Name        string
 	File 		*os.File
-	Bitfield 	bitfield.Bitfield
+	Bitfield 	message.Bitfield
 }
 
 type pieceWork struct {
@@ -46,7 +45,7 @@ type pieceResult struct {
 
 type pieceProgress struct {
 	index      int
-	client     *client.Client
+	client     *seeder.Seeder
 	buf        []byte
 	downloaded int
 	requested  int
@@ -74,7 +73,7 @@ func (state *pieceProgress) readMessage() error {
 	return nil
 }
 
-func attemptDownloadPiece(c *client.Client, pw *pieceWork) ([]byte, error) {
+func attemptDownloadPiece(c *seeder.Seeder, pw *pieceWork) ([]byte, error) {
 	state := pieceProgress{
 		index:  pw.index,
 		client: c,
@@ -116,13 +115,13 @@ func attemptDownloadPiece(c *client.Client, pw *pieceWork) ([]byte, error) {
 func checkIntegrity(pw *pieceWork, buf []byte) error {
 	hash := sha1.Sum(buf)
 	if !bytes.Equal(hash[:], pw.hash[:]) {
-		return fmt.Errorf("Index %d failed integrity check", pw.index)
+		return fmt.Errorf("index %d failed integrity check", pw.index)
 	}
 	return nil
 }
 
-func (t *Torrent) startDownloader(peer client.Peer, workQueue chan *pieceWork, results chan *pieceResult) {
-	c, err := client.New(peer, t.PeerID, t.InfoHash)
+func (t *Torrent) startDownloader(peer seeder.Peer, workQueue chan *pieceWork, results chan *pieceResult) {
+	c, err := seeder.Connect(peer, t.PeerID, t.InfoHash)
 	if err != nil {
 		log.Printf("Could not handshake with %s. Disconnecting\n", peer.IP)
 		return
@@ -186,7 +185,7 @@ func (t *Torrent) Download() error {
 		_, err := t.File.ReadAt(SinglePiece, int64(start))
 
 		if err != nil{
-			fmt.Errorf("Reading file unsuccessful", err)
+			fmt.Println("Reading file unsuccessful", err)
 		}
 
 		integrity_error := checkIntegrity(&pieceWork, SinglePiece)

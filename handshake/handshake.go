@@ -7,29 +7,30 @@ import (
 
 // A Handshake is a special message that a peer uses to identify itself
 type Handshake struct {
-	Pstr     string
+	ProtocolName string
 	InfoHash [20]byte
 	PeerID   [20]byte
 }
 
-// New creates a new handshake with the standard pstr
-func New(infoHash, peerID [20]byte) *Handshake {
+// Connect creates a Connect handshake with the standard pstr
+func Connect(infoHash, peerID [20]byte) *Handshake {
 	return &Handshake{
-		Pstr:     "BitTorrent protocol",
+		ProtocolName:     "BitTorrent protocol",
 		InfoHash: infoHash,
 		PeerID:   peerID,
 	}
 }
 
 // Serialize serializes the handshake to a buffer
-func (h *Handshake) Serialize() []byte {
-	buf := make([]byte, len(h.Pstr)+49)
-	buf[0] = byte(len(h.Pstr))
+func (handshake *Handshake) Serialize() []byte {
+	buf := make([]byte, len(handshake.ProtocolName)+49)
+
+	buf[0] = byte(len(handshake.ProtocolName))
 	curr := 1
-	curr += copy(buf[curr:], h.Pstr)
+	curr += copy(buf[curr:], handshake.ProtocolName)
 	curr += copy(buf[curr:], make([]byte, 8)) // 8 reserved bytes
-	curr += copy(buf[curr:], h.InfoHash[:])
-	curr += copy(buf[curr:], h.PeerID[:])
+	curr += copy(buf[curr:], handshake.InfoHash[:])
+	curr += copy(buf[curr:], handshake.PeerID[:])
 	return buf
 }
 
@@ -40,14 +41,14 @@ func Read(r io.Reader) (*Handshake, error) {
 	if err != nil {
 		return nil, err
 	}
-	pstrlen := int(lengthBuf[0])
+	ProtocolNamelen := int(lengthBuf[0])
 
-	if pstrlen == 0 {
-		err := fmt.Errorf("pstrlen cannot be 0")
+	if ProtocolNamelen == 0 {
+		err := fmt.Errorf("ProtocolNamelen cannot be 0")
 		return nil, err
 	}
 
-	handshakeBuf := make([]byte, 48+pstrlen)
+	handshakeBuf := make([]byte, 48+ProtocolNamelen)
 	_, err = io.ReadFull(r, handshakeBuf)
 	if err != nil {
 		return nil, err
@@ -55,11 +56,11 @@ func Read(r io.Reader) (*Handshake, error) {
 
 	var infoHash, peerID [20]byte
 
-	copy(infoHash[:], handshakeBuf[pstrlen+8:pstrlen+8+20])
-	copy(peerID[:], handshakeBuf[pstrlen+8+20:])
+	copy(infoHash[:], handshakeBuf[ProtocolNamelen+8:ProtocolNamelen+8+20])
+	copy(peerID[:], handshakeBuf[ProtocolNamelen+8+20:])
 
 	h := Handshake{
-		Pstr:     string(handshakeBuf[0:pstrlen]),
+		ProtocolName:     string(handshakeBuf[0:ProtocolNamelen]),
 		InfoHash: infoHash,
 		PeerID:   peerID,
 	}

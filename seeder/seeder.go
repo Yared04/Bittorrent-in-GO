@@ -1,159 +1,138 @@
-package main
+package seeder
 
 import (
+	"Bittorrent-client/handshake"
+	"Bittorrent-client/message"
+	"bytes"
+	"crypto/rand"
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"io/ioutil"
-	"Bittorrent-client/handshake"
-	"Bittorrent-client/message"
-	"Bittorrent-client/bitfield"
-	"encoding/binary"
-	"encoding/hex"
-	"encoding/json"
-	
+	"time"
 )
 
-const (
-	HOST = "127.0.0.1"
-	PORT = "8080"
-	TYPE = "tcp"
+type Seeder struct {
+	Conn     net.Conn
+	Choked   bool
+	Bitfield message.Bitfield
+	peer     Peer
+	infoHash [20]byte
+	peerID   [20]byte
+}
+type PeerID [20]byte
 
+var prefix = []byte("-P00001-")
 
-)
-
-type Torrent struct {
-	Bitfield []byte `json:"bitfield"`
-	Path string `json:"path"`
-	Piecelength float64 `json:"piecelength"`
-	Length float64 `json:"length"`
+type Peer struct {
+    IP   net.IP
+    Port uint16
 }
 
-func main() {
-	listen, err := net.Listen(TYPE, ":"+PORT)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
-	fmt.Println(fmt.Sprintf("listening on %s:%s", HOST, PORT))
-	// close listener
-	defer listen.Close()
-	for {
-		conn, err := listen.Accept()
-		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
-		}
-		go handleRequest(conn)
-	}
+// GetPeer returns the seeders as an array of peers(ip:port)
+func GetPeer() ([]Peer, error) {
+	peers := make([]Peer, 1)
+	peer := make([]byte, 4)
+	peer[0] = 127
+	peer[1] = 0
+	peer[2] = 0
+	peer[3] = 1
+
+	peers[0].IP = net.IP(peer)
+	peers[0].Port = 8080
+    return peers, nil
 }
 
-
-
-
-func handleRequest(conn net.Conn) {
-	
-	defer conn.Close()
-		
-	torrent, err := completeHandShake(conn)
-	if err != nil{
-		
-		return 
-	}
-	
-
-	sendBitfeild(torrent, conn)
-
-	piecelength := torrent.Piecelength
-  	
-	f, err := os.Open(torrent.Path)
-
-	if err != nil {
-        fmt.Println("File reading error", err)
-        return
+func GeneratePeerID() (PeerID, error) {
+    var id PeerID
+    copy(id[:], prefix)
+    _, err := rand.Read(id[len(prefix):])
+    if err != nil {
+        return PeerID{}, err
     }
-
-	for {
-		msg, err := message.Read(conn)
-		
-		if err != nil {
-			return
-		}
-
-		go serveRequest(msg, piecelength, f, conn )
-	}
-
-	
-}
-func serveRequest(msg *message.Message, piecelength float64, file *os.File, connection net.Conn) {
-	if msg.ID == message.MsgRequest {
-			
-		index, begin, length := binary.BigEndian.Uint32(msg.Payload[0:4]), binary.BigEndian.Uint32(msg.Payload[4:8]), binary.BigEndian.Uint32(msg.Payload[8:])
-		
-		content := make([]byte, length) 
-		
-		_, err := file.ReadAt(content, int64(int64(index)*int64(piecelength) + int64(begin)))
-		if err != nil{
-			log.Fatal("Error Reading File.")
-		}
-		piece := getPiece(content, index, begin, length)
-		connection.Write(piece.Serialize())
-	}
-}
-
-func getPiece(content []byte, index uint32, begin uint32, length uint32) *message.Message{
-
-	buf := make([]byte, 8 + length)
-	binary.BigEndian.PutUint32(buf[0:4], uint32(index))
-	binary.BigEndian.PutUint32(buf[4:8], uint32(begin))
-	copy(buf[8:], content)
-	msg := &message.Message{
-		ID:      message.MsgPiece,
-		Payload: buf,
-	}
-	
-	return msg
-	
+    return id, nil
 }
 
 
-func completeHandShake(conn net.Conn) (*Torrent, error){
+func handshakeSeeder(conn net.Conn, infohash, peerID [20]byte) (*handshake.Handshake, error) {
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
+	defer conn.SetDeadline(time.Time{}) // Disable the deadline
+
+	req := handshake.Connect(infohash, peerID)
+	_, err := conn.Write(req.Serialize())
+	if err != nil {
+		return nil, err
+	}
+
 	res, err := handshake.Read(conn)
 	if err != nil {
-		log.Fatal(err)
 		return nil, err
 	}
+	if !bytes.Equal(res.InfoHash[:], infohash[:]) {
+		return nil, err
+	}
+	return res, nil
+}
 
+func getBitField(conn net.Conn) (message.Bitfield, error) {
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	defer conn.SetDeadline(time.Time{}) // Disable the deadline
 
-	infoHash := hex.EncodeToString(res.InfoHash[:])
-
-	// Open our torrent jsonFile
-	jsonFile, err := os.Open(fmt.Sprintf("files/%s.json", infoHash))
-	defer jsonFile.Close()
+	msg, err := message.Read(conn)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
+	}
+	if msg == nil {
+		return nil, err
+	}
+	if msg.ID != message.MsgBitfield {
 		return nil, err
 	}
 
-	torrent := Torrent{}
-
-	byteValue, err := ioutil.ReadAll(jsonFile)
-	json.Unmarshal(byteValue, &torrent)
-	
-	conn.Write(res.Serialize())
-
-	return &torrent, err
+	return msg.Payload, nil
 }
 
-func sendBitfeild(torrent *Torrent, conn net.Conn){
-
-	var bf bitfield.Bitfield = []byte(torrent.Bitfield)
-	msg := &message.Message{
-		ID:      message.MsgBitfield,
-		Payload: bf,
+// Connect connects with a peer, completes a handshake, and receives a handshake
+// returns an err if any of those fail.
+func Connect(peer Peer, peerID, infoHash [20]byte) (*Seeder, error) {
+	log.Println(peer.String())
+	conn, err := net.DialTimeout("tcp", peer.String(), 10*time.Second)
+	if err != nil {
+		return nil, err
 	}
-	conn.Write(msg.Serialize())
 
+	_, err = handshakeSeeder(conn, infoHash, peerID)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	bf, err := getBitField(conn)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	return &Seeder{
+		Conn:     conn,
+		Choked:   false,
+		Bitfield: bf,
+		peer:     peer,
+		infoHash: infoHash,
+		peerID:   peerID,
+	}, nil
 }
 
+func (c *Seeder) Read() (*message.Message, error) {
+	msg, err := message.Read(c.Conn)
+	return msg, err
+}
+
+func (c *Seeder) SendRequest(index, begin, length int) error {
+	req := message.FormatRequest(index, begin, length)
+	_, err := c.Conn.Write(req.Serialize())
+	return err
+}
+
+func (p Peer) String() string {
+    return net.JoinHostPort(p.IP.String(), fmt.Sprint(p.Port))
+}
