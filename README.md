@@ -11,6 +11,7 @@ To run the leecher localy on the same pc:
 
 - go to the root directory
 - go run main.go <path to the torrent file> <Output filename>
+example: go run mani.go seed\debian-edu-11.6.0-amd64-netinst.iso debian.iso
 
 
 To run the leecher from a pc that is in the same LAN network(pc connected to same hotspot):
@@ -25,3 +26,6 @@ To run the leecher from a pc that is in the same LAN network(pc connected to sam
 
 - cd to the root directory
 - go run main.go <path to the torrent file> <Output filename>
+
+Our protocol only works with the debian torrent file that we have attached. Because
+the seeder needs the info hash meta data(json file) in the seed/files directory, to keep track of the downloaded pieces.
