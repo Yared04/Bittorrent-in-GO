@@ -1,11 +1,9 @@
 package peers
 
 import (
-    "crypto/rand"
-    // "encoding/binary"
-    // "errors"
-    "fmt"
-    "net"
+	"crypto/rand"
+	"fmt"
+	"net"
 )
 
 type PeerID [20]byte
@@ -18,37 +16,17 @@ type Peer struct {
     Port uint16
 }
 
-// Unmarshal parses the given byte slice and returns a slice of Peer objects
+// Unmarshal returns the seeders as an array of peers(ip:port)
 func Unmarshal() ([]Peer, error) {
 	peers := make([]Peer, 1)
 	peer := make([]byte, 4)
-	peer[0] = 127
-	peer[1] = 0
-	peer[2] = 0
-	peer[3] = 1
+	peer[0] = 192
+	peer[1] = 168
+	peer[2] = 63
+	peer[3] = 80
 
 	peers[0].IP = net.IP(peer)
-	peers[0].Port = 8080
-
-	
-    // const peerSize = 6
-	// // fmt.Println(peersBin, "###########################################################3")
-    // numPeers := len(peersBin) / peerSize
-
-    // if len(peersBin)%peerSize != 0 {
-    //     return nil, errors.New("failed to unmarshal")
-    // }
-
-    // peers := make([]Peer, numPeers)
-    // for i := 0; i < numPeers; i++ {
-    //     offset := i * peerSize
-    //     peers[i].IP = net.IP(peersBin[offset : offset+4])
-    //     peers[i].Port = binary.BigEndian.Uint16([]byte(peersBin[offset+4 : offset+6]))
-	// 	// fmt.Println(peers[i].IP, peers[i].Port, "#######################################################3")
-
-    // }
-	// // fmt.Println(peers, "#######################################################3")
-
+	peers[0].Port = 5858
     return peers, nil
 }
 

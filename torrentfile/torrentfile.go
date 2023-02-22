@@ -2,11 +2,12 @@ package torrentfile
 
 import (
 	"Bittorrent-client/bitfield"
-	"Bittorrent-client/p2p"
 	"Bittorrent-client/peers"
+	"Bittorrent-client/peerTopeer"
 	"bytes"
 	"crypto/sha1"
 	"fmt"
+	"log"
 	"math"
 	"os"
 
@@ -44,13 +45,15 @@ func (tf *TorrentFile) Download(path string) error {
 	}
 	//just hardcode the ip and port number for the seeder: IP:Port and return that as list
 	seed, _ := peers.Unmarshal()
+	log.Println(seed)
+	
 	pieceLength := len(tf.PieceHashes)
 	ByteSize := 8
 
 	bitfield := make(bitfield.Bitfield, int(math.Ceil(float64(pieceLength)/ float64(ByteSize))))
-	outFile, err := os.OpenFile(tf.Name, os.O_RDWR|os.O_CREATE, 0666)
+	outFile, _ := os.OpenFile(tf.Name, os.O_RDWR|os.O_CREATE, 0666)
 
-	t := p2p.Torrent{
+	torrent := peerTopeer.Torrent{
 		Peers:       seed,
 		PeerID:      peerID,
 		InfoHash:    tf.InfoHash,
@@ -62,7 +65,7 @@ func (tf *TorrentFile) Download(path string) error {
 		Bitfield:    bitfield,
 	}
 
-	er := t.Download()
+	er := torrent.Download()
 	if er != nil {
 		return er
 	}

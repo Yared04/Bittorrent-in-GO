@@ -1,15 +1,15 @@
 package client
 
 import (
-	"bytes"
-	"fmt"
-	"net"
-	"time"
 	"Bittorrent-client/bitfield"
-	"Bittorrent-client/peers"
 	"Bittorrent-client/handshake"
 	"Bittorrent-client/message"
-
+	"Bittorrent-client/peers"
+	"bytes"
+	"fmt"
+	"log"
+	"net"
+	"time"
 )
 
 // A Client is a TCP connection with a peer
@@ -23,10 +23,11 @@ type Client struct {
 }
 
 func completeHandshake(conn net.Conn, infohash, peerID [20]byte) (*handshake.Handshake, error) {
-	conn.SetDeadline(time.Now().Add(3 * time.Second))
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
 	defer conn.SetDeadline(time.Time{}) // Disable the deadline
 
 	req := handshake.New(infohash, peerID)
+	fmt.Println(req, "here")
 	_, err := conn.Write(req.Serialize())
 	if err != nil {
 		return nil, err
@@ -65,8 +66,10 @@ func recvBitfield(conn net.Conn) (bitfield.Bitfield, error) {
 // New connects with a peer, completes a handshake, and receives a handshake
 // returns an err if any of those fail.
 func New(peer peers.Peer, peerID, infoHash [20]byte) (*Client, error) {
-	conn, err := net.DialTimeout("tcp", peer.String(), 3*time.Second)
+	log.Println(peer.String())
+	conn, err := net.DialTimeout("tcp", peer.String(), 10*time.Second)
 	if err != nil {
+		log.Println("fails here", err)
 		return nil, err
 	}
 
