@@ -4,9 +4,7 @@ import (
 	"Bittorrent-client/handshake"
 	"Bittorrent-client/message"
 	"bytes"
-	"crypto/rand"
 	"fmt"
-	"log"
 	"net"
 	"time"
 )
@@ -17,11 +15,7 @@ type Seeder struct {
 	Bitfield message.Bitfield
 	peer     Peer
 	infoHash [20]byte
-	peerID   [20]byte
 }
-type PeerID [20]byte
-
-var prefix = []byte("-P00001-")
 
 type Peer struct {
     IP   net.IP
@@ -30,8 +24,11 @@ type Peer struct {
 
 // GetPeer returns the seeders as an array of peers(ip:port)
 func GetPeer() ([]Peer, error) {
+
+	
 	peers := make([]Peer, 1)
-	peer := make([]byte, 4)
+	peer := make([]byte, 4) 
+	//to run the seeder on another laptop, change the Ip address to the computer the seeder is running on
 	peer[0] = 127
 	peer[1] = 0
 	peer[2] = 0
@@ -42,40 +39,9 @@ func GetPeer() ([]Peer, error) {
     return peers, nil
 }
 
-func GeneratePeerID() (PeerID, error) {
-    var id PeerID
-    copy(id[:], prefix)
-    _, err := rand.Read(id[len(prefix):])
-    if err != nil {
-        return PeerID{}, err
-    }
-    return id, nil
-}
-
-
-func handshakeSeeder(conn net.Conn, infohash, peerID [20]byte) (*handshake.Handshake, error) {
-	conn.SetDeadline(time.Now().Add(30 * time.Second))
-	defer conn.SetDeadline(time.Time{}) // Disable the deadline
-
-	req := handshake.Connect(infohash, peerID)
-	_, err := conn.Write(req.Serialize())
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := handshake.Read(conn)
-	if err != nil {
-		return nil, err
-	}
-	if !bytes.Equal(res.InfoHash[:], infohash[:]) {
-		return nil, err
-	}
-	return res, nil
-}
-
 func getBitField(conn net.Conn) (message.Bitfield, error) {
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
-	defer conn.SetDeadline(time.Time{}) // Disable the deadline
+	defer conn.SetDeadline(time.Time{}) 
 
 	msg, err := message.Read(conn)
 	if err != nil {
@@ -91,16 +57,35 @@ func getBitField(conn net.Conn) (message.Bitfield, error) {
 	return msg.Payload, nil
 }
 
-// Connect connects with a peer, completes a handshake, and receives a handshake
-// returns an err if any of those fail.
-func Connect(peer Peer, peerID, infoHash [20]byte) (*Seeder, error) {
-	log.Println(peer.String())
+func handshakeSeeder(conn net.Conn, infohash [20]byte) (*handshake.Handshake, error) {
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
+	defer conn.SetDeadline(time.Time{}) 
+
+	req := handshake.Connect(infohash)
+	_, err := conn.Write(req.Serialize())
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := handshake.Read(conn)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(res.InfoHash[:], infohash[:]) {
+		return nil, err
+	}
+	return res, nil
+}
+
+
+
+func Connect(peer Peer, infoHash [20]byte) (*Seeder, error) {
 	conn, err := net.DialTimeout("tcp", peer.String(), 10*time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = handshakeSeeder(conn, infoHash, peerID)
+	_, err = handshakeSeeder(conn, infoHash)
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -118,7 +103,6 @@ func Connect(peer Peer, peerID, infoHash [20]byte) (*Seeder, error) {
 		Bitfield: bf,
 		peer:     peer,
 		infoHash: infoHash,
-		peerID:   peerID,
 	}, nil
 }
 

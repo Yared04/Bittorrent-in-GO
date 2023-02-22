@@ -22,7 +22,6 @@ const MaxBacklog = 5
 // Torrent holds data required to download a torrent from a list of peers
 type Torrent struct {
 	Peers      []seeder.Peer
-	PeerID      [20]byte
 	InfoHash    [20]byte
 	PieceHashes [][20]byte
 	PieceLength int
@@ -32,13 +31,13 @@ type Torrent struct {
 	Bitfield 	message.Bitfield
 }
 
-type pieceWork struct {
+type pieceToDownload struct {
 	index  int
 	hash   [20]byte
 	length int
 }
 
-type pieceResult struct {
+type downloadedPiece struct {
 	index int
 	buf   []byte
 }
@@ -73,7 +72,7 @@ func (state *pieceProgress) readMessage() error {
 	return nil
 }
 
-func attemptDownloadPiece(c *seeder.Seeder, pw *pieceWork) ([]byte, error) {
+func attemptDownloadPiece(c *seeder.Seeder, pw *pieceToDownload) ([]byte, error) {
 	state := pieceProgress{
 		index:  pw.index,
 		client: c,
@@ -112,7 +111,7 @@ func attemptDownloadPiece(c *seeder.Seeder, pw *pieceWork) ([]byte, error) {
 	return state.buf, nil
 }
 
-func checkIntegrity(pw *pieceWork, buf []byte) error {
+func checkIntegrity(pw *pieceToDownload, buf []byte) error {
 	hash := sha1.Sum(buf)
 	if !bytes.Equal(hash[:], pw.hash[:]) {
 		return fmt.Errorf("index %d failed integrity check", pw.index)
@@ -120,8 +119,8 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 	return nil
 }
 
-func (t *Torrent) startDownloader(peer seeder.Peer, workQueue chan *pieceWork, results chan *pieceResult) {
-	c, err := seeder.Connect(peer, t.PeerID, t.InfoHash)
+func (t *Torrent) startDownloader(peer seeder.Peer, workQueue chan *pieceToDownload, results chan *downloadedPiece) {
+	c, err := seeder.Connect(peer, t.InfoHash)
 	if err != nil {
 		log.Printf("Could not handshake with %s. Disconnecting\n", peer.IP)
 		return
@@ -150,7 +149,7 @@ func (t *Torrent) startDownloader(peer seeder.Peer, workQueue chan *pieceWork, r
 			continue
 		}
 
-		results <- &pieceResult{pw.index, buf}
+		results <- &downloadedPiece{pw.index, buf}
 	}
 }
 
@@ -172,22 +171,23 @@ func (t *Torrent) calculatePieceSize(index int) int {
 func (t *Torrent) Download() error {
 	log.Println("Starting download for", t.Name)
 	// Init queues for workers to retrieve work and send results
-	workQueue := make(chan *pieceWork, len(t.PieceHashes))
-	results := make(chan *pieceResult)
+	workQueue := make(chan *pieceToDownload, len(t.PieceHashes))
+	results := make(chan *downloadedPiece)
 	completePieces := 0
 	restore := false
 	for index, hash := range t.PieceHashes {
 		length := t.calculatePieceSize(index)
 		start, _ := t.calculateBoundsForPiece(index)
-		pieceWork := pieceWork{index, hash, length}
+		pieceToDownload := pieceToDownload{index, hash, length}
 
 		SinglePiece := make([]byte , length)
 		t.File.ReadAt(SinglePiece, int64(start))
 
-		integrity_error := checkIntegrity(&pieceWork, SinglePiece)
+		
+		integrity_error := checkIntegrity(&pieceToDownload, SinglePiece)
 
 		if integrity_error != nil {
-			workQueue <- &pieceWork
+			workQueue <- &pieceToDownload
 		} else {
 			restore = true
 			completePieces ++

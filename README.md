@@ -1,8 +1,8 @@
 # Bittorrent-in-GO
-In one pc
+
 To run the seeder:
-- cd seeder
-- go run seeder.go
+- cd seed
+- go run seed.go
 
 
 To run the leecher:
