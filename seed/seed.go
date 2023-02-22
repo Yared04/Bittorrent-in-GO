@@ -32,7 +32,7 @@ func main() {
 	listen, err := net.Listen(TYPE, ":"+PORT)
 	if err != nil {
 		log.Fatal(err)
-		os.Exit(1)
+	
 	}
 	fmt.Println(fmt.Sprintf("listening on %s:%s", HOST, PORT))
 	// close listener
@@ -41,7 +41,7 @@ func main() {
 		conn, err := listen.Accept()
 		if err != nil {
 			log.Fatal(err)
-			os.Exit(1)
+		
 		}
 		go handleRequest(conn)
 	}
@@ -79,7 +79,7 @@ func handleRequest(conn net.Conn) {
 			return
 		}
 
-		go serveRequest(msg, piecelength, f, conn )
+		serveRequest(msg, piecelength, f, conn )
 	}
 
 	
@@ -94,8 +94,10 @@ func serveRequest(msg *message.Message, piecelength float64, file *os.File, conn
 		_, err := file.ReadAt(content, int64(int64(index)*int64(piecelength) + int64(begin)))
 		if err != nil{
 			log.Fatal("Error Reading File.")
+			
 		}
 		piece := getPiece(content, index, begin, length)
+		log.Printf("sending piece index %d", index)
 		connection.Write(piece.Serialize())
 	}
 }
