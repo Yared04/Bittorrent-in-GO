@@ -182,11 +182,7 @@ func (t *Torrent) Download() error {
 		pieceWork := pieceWork{index, hash, length}
 
 		SinglePiece := make([]byte , length)
-		_, err := t.File.ReadAt(SinglePiece, int64(start))
-
-		if err != nil{
-			fmt.Println("Reading file unsuccessful", err)
-		}
+		t.File.ReadAt(SinglePiece, int64(start))
 
 		integrity_error := checkIntegrity(&pieceWork, SinglePiece)
 

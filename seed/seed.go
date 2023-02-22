@@ -130,7 +130,7 @@ func handshakeSeeder(conn net.Conn) (*Torrent, error){
 	jsonFile, err := os.Open(fmt.Sprintf("files/%s.json", infoHash))
 	defer jsonFile.Close()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Recived Request for file with hash %s but file is not available", infoHash )
 		return nil, err
 	}
 
