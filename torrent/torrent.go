@@ -39,10 +39,6 @@ type TorrentFile struct {
 
 
 func (tf *TorrentFile) Download(path string) error {
-    peerID, err := seeder.GeneratePeerID()
-    if err != nil {
-        return err
-    }
 
     // Just hardcode the IP and port number for the seeder: IP:Port and return that as a list
     seeds, _ := seeder.GetPeer()
@@ -56,7 +52,6 @@ func (tf *TorrentFile) Download(path string) error {
     torrent := downloader.Torrent{
         Bitfield:    bitfield,
         Peers:       seeds,
-        PeerID:      peerID,
         InfoHash:    tf.InfoHash,
         PieceHashes: tf.PieceHashes,
         PieceLength: tf.PieceLength,
