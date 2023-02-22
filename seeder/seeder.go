@@ -64,7 +64,6 @@ func handleRequest(conn net.Conn) {
 	
 
 	sendBitfeild(torrent, conn)
-	sendUnchoke(conn)
 
 	piecelength := torrent.Piecelength
   	
@@ -158,13 +157,3 @@ func sendBitfeild(torrent *Torrent, conn net.Conn){
 
 }
 
-func sendUnchoke(conn net.Conn){
-
-	unchokemsg := &message.Message{
-		ID:      message.MsgUnchoke,
-	
-	}
-
-	conn.Write(unchokemsg.Serialize())
-
-}
