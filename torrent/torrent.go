@@ -1,30 +1,20 @@
 package torrentfile
 
 import (
-    "Bittorrent-client/bitfield"
-    "Bittorrent-client/client"
-    "Bittorrent-client/downloader"
-    "bytes"
-    "crypto/sha1"
-    "fmt"
-    "log"
-    "math"
-    "os"
+	"Bittorrent-client/downloader"
+	"Bittorrent-client/message"
+	"Bittorrent-client/seeder"
+	"bytes"
+	"crypto/sha1"
+	"fmt"
+	"math"
+	"os"
 
-    "github.com/jackpal/bencode-go"
+	"github.com/jackpal/bencode-go"
 )
 
 const Port uint16 = 6087
 
-// TorrentFile encodes the metadata from a .torrent file
-type TorrentFile struct {
-    Announce    string
-    InfoHash    [20]byte
-    PieceHashes [][20]byte
-    PieceLength int
-    Length      int
-    Name        string
-}
 
 type bencodeTorrent struct {
     Announce string      `bencode:"announce"`
@@ -38,25 +28,34 @@ type bencodeInfo struct {
     PieceLength int    `bencode:"piece length"`
 }
 
+type TorrentFile struct {
+    Announce    string
+    InfoHash    [20]byte
+    PieceHashes [][20]byte
+    PieceLength int
+    Length      int
+    Name        string
+}
+
+
 func (tf *TorrentFile) Download(path string) error {
-    peerID, err := client.GeneratePeerID()
+    peerID, err := seeder.GeneratePeerID()
     if err != nil {
         return err
     }
 
     // Just hardcode the IP and port number for the seeder: IP:Port and return that as a list
-    seed, _ := client.Unmarshal()
-    log.Println(seed)
+    seeds, _ := seeder.GetPeer()
 
     pieceLength := len(tf.PieceHashes)
     ByteSize := 8
 
-    bitfield := make(bitfield.Bitfield, int(math.Ceil(float64(pieceLength) / float64(ByteSize))))
+    bitfield := make(message.Bitfield, int(math.Ceil(float64(pieceLength) / float64(ByteSize))))
     outFile, _ := os.OpenFile(tf.Name, os.O_RDWR|os.O_CREATE, 0666)
 
     torrent := downloader.Torrent{
         Bitfield:    bitfield,
-        Peers:       seed,
+        Peers:       seeds,
         PeerID:      peerID,
         InfoHash:    tf.InfoHash,
         PieceHashes: tf.PieceHashes,
