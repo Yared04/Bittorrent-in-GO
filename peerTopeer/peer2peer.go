@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 	"time"
-
+	"strings"
 	"Bittorrent-client/bitfield"
 	"Bittorrent-client/client"
 	"Bittorrent-client/message"
@@ -133,7 +133,7 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 }
 
 func (t *Torrent) startDownloadWorker(peer peers.Peer, workQueue chan *pieceWork, results chan *pieceResult) {
-	log.Println(peer, "######################33") 
+	
 	c, err := client.New(peer, t.PeerID, t.InfoHash)
 	if err != nil {
 		log.Printf("Could not handshake with %s. Disconnecting\n", peer.IP)
@@ -192,6 +192,7 @@ func (t *Torrent) Download() error {
 	workQueue := make(chan *pieceWork, len(t.PieceHashes))
 	results := make(chan *pieceResult)
 	completePieces := 0
+	restore := false
 	for index, hash := range t.PieceHashes {
 		length := t.calculatePieceSize(index)
 		start, _ := t.calculateBoundsForPiece(index)
@@ -209,6 +210,7 @@ func (t *Torrent) Download() error {
 		if integrity_error != nil {
 			workQueue <- &pieceWork
 		} else {
+			restore = true
 			completePieces ++
 			t.Bitfield.SetPiece(index)
 		}
@@ -222,7 +224,10 @@ func (t *Torrent) Download() error {
 		go t.startDownloadWorker(peer, workQueue, results)
 	}
 
-
+	if (restore) {
+		log.Printf("Download is Resuming from:  %0.2f%%", float64(completePieces) / float64(len(t.PieceHashes)) * 100)
+		
+	}
 	for completePieces < len(t.PieceHashes) {
 		res := <-results
 		begin, _ := t.calculateBoundsForPiece(res.index)
@@ -237,8 +242,8 @@ func (t *Torrent) Download() error {
 		percent := float64(completePieces) / float64(len(t.PieceHashes)) * 100
 		// numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
 
-		log.Printf("\rOn %0.2f%%", percent)
-		log.Printf("downloaded piece # \033[2K\r%d \n", res.index)
+		fmt.Printf("\r Download Progress: %s  %0.2f%%",strings.Repeat("#", int(percent/10)), percent)
+
 	}
 	log.Printf("Download Finished!!!, You can find your downloaded file in the current directory.")
 	close(workQueue)
