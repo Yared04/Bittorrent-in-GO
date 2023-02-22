@@ -119,7 +119,7 @@ func checkIntegrity(pw *pieceToDownload, buf []byte) error {
 	return nil
 }
 
-func (t *Torrent) startDownloader(peer seeder.Peer, workQueue chan *pieceToDownload, results chan *downloadedPiece) {
+func (t *Torrent) startDownloader(peer seeder.Peer, downloadQueue chan *pieceToDownload, results chan *downloadedPiece) {
 	c, err := seeder.Connect(peer, t.InfoHash)
 	if err != nil {
 		log.Printf("Could not handshake with %s. Disconnecting\n", peer.IP)
@@ -128,9 +128,9 @@ func (t *Torrent) startDownloader(peer seeder.Peer, workQueue chan *pieceToDownl
 	defer c.Conn.Close()
 	log.Printf("Completed handshake with %s\n", peer.IP)
 
-	for pw := range workQueue {
+	for pw := range downloadQueue {
 		if !c.Bitfield.HasPiece(pw.index) {
-			workQueue <- pw // Put piece back on the queue
+			downloadQueue <- pw // Put piece back on the queue
 			continue
 		}
 
@@ -138,14 +138,14 @@ func (t *Torrent) startDownloader(peer seeder.Peer, workQueue chan *pieceToDownl
 		buf, err := attemptDownloadPiece(c, pw)
 		if err != nil {
 			log.Println("Exiting", err)
-			workQueue <- pw // Put piece back on the queue
+			downloadQueue <- pw // Put piece back on the queue
 			return
 		}
 
 		err = checkIntegrity(pw, buf)
 		if err != nil {
 			log.Printf("Piece #%d failed integrity check\n", pw.index)
-			workQueue <- pw // Put piece back on the queue
+			downloadQueue <- pw // Put piece back on the queue
 			continue
 		}
 
@@ -171,7 +171,7 @@ func (t *Torrent) calculatePieceSize(index int) int {
 func (t *Torrent) Download() error {
 	log.Println("Starting download for", t.Name)
 	// Init queues for workers to retrieve work and send results
-	workQueue := make(chan *pieceToDownload, len(t.PieceHashes))
+	downloadQueue := make(chan *pieceToDownload, len(t.PieceHashes))
 	results := make(chan *downloadedPiece)
 	completePieces := 0
 	restore := false
@@ -187,7 +187,7 @@ func (t *Torrent) Download() error {
 		integrity_error := checkIntegrity(&pieceToDownload, SinglePiece)
 
 		if integrity_error != nil {
-			workQueue <- &pieceToDownload
+			downloadQueue <- &pieceToDownload
 		} else {
 			restore = true
 			completePieces ++
@@ -200,11 +200,11 @@ func (t *Torrent) Download() error {
 
 	// Start workers
 	for _, peer := range t.Peers {
-		go t.startDownloader(peer, workQueue, results)
+		go t.startDownloader(peer, downloadQueue, results)
 	}
 
 	if (restore) {
-		log.Printf("Download is Resuming from:  %0.2f%%", float64(completePieces) / float64(len(t.PieceHashes)) * 100)
+		log.Printf("Download is Resuming from:  %0.f%%", float64(completePieces) / float64(len(t.PieceHashes)) * 100)
 		
 	}
 	for completePieces < len(t.PieceHashes) {
@@ -226,7 +226,7 @@ func (t *Torrent) Download() error {
 	}
 
 	log.Printf("Download Finished!!!, You can find your downloaded file in the current directory.")
-	close(workQueue)
+	close(downloadQueue)
 
 	return nil
 }

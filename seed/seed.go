@@ -85,6 +85,7 @@ func handleRequest(conn net.Conn) {
 	
 }
 func serveRequest(msg *message.Message, piecelength float64, file *os.File, connection net.Conn) {
+	
 	if msg.ID == message.MsgRequest {
 			
 		index, begin, length := binary.BigEndian.Uint32(msg.Payload[0:4]), binary.BigEndian.Uint32(msg.Payload[4:8]), binary.BigEndian.Uint32(msg.Payload[8:])
@@ -93,8 +94,8 @@ func serveRequest(msg *message.Message, piecelength float64, file *os.File, conn
 		
 		_, err := file.ReadAt(content, int64(int64(index)*int64(piecelength) + int64(begin)))
 		if err != nil{
-			log.Fatal("Error Reading File.")
-			
+			log.Printf("Error Reading File index %d", index)
+			return
 		}
 		piece := getPiece(content, index, begin, length)
 		log.Printf("sending piece index %d", index)
