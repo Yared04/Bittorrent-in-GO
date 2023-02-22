@@ -2,8 +2,8 @@ package torrentfile
 
 import (
 	"Bittorrent-client/bitfield"
-	"Bittorrent-client/peers"
-	"Bittorrent-client/peerTopeer"
+	"Bittorrent-client/client"
+	"Bittorrent-client/downloader"
 	"bytes"
 	"crypto/sha1"
 	"fmt"
@@ -39,12 +39,12 @@ type bencodeInfo struct {
 }
 
 func (tf *TorrentFile) Download(path string) error {
-	peerID, err := peers.GeneratePeerID()
+	peerID, err := client.GeneratePeerID()
 	if err != nil {
 		return err
 	}
 	//just hardcode the ip and port number for the seeder: IP:Port and return that as list
-	seed, _ := peers.Unmarshal()
+	seed, _ := client.Unmarshal()
 	log.Println(seed)
 	
 	pieceLength := len(tf.PieceHashes)
@@ -53,7 +53,7 @@ func (tf *TorrentFile) Download(path string) error {
 	bitfield := make(bitfield.Bitfield, int(math.Ceil(float64(pieceLength)/ float64(ByteSize))))
 	outFile, _ := os.OpenFile(tf.Name, os.O_RDWR|os.O_CREATE, 0666)
 
-	torrent := peerTopeer.Torrent{
+	torrent := downloader.Torrent{
 		Peers:       seed,
 		PeerID:      peerID,
 		InfoHash:    tf.InfoHash,

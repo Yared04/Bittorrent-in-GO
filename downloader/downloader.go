@@ -1,4 +1,4 @@
-package peerTopeer
+package downloader
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 	"Bittorrent-client/bitfield"
 	"Bittorrent-client/client"
 	"Bittorrent-client/message"
-	"Bittorrent-client/peers"
 )
 
 // MaxBlockSize is the largest number of bytes a request can ask for
@@ -22,7 +21,7 @@ const MaxBacklog = 5
 
 // Torrent holds data required to download a torrent from a list of peers
 type Torrent struct {
-	Peers      []peers.Peer
+	Peers      []client.Peer
 	PeerID      [20]byte
 	InfoHash    [20]byte
 	PieceHashes [][20]byte
@@ -132,8 +131,7 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 	return nil
 }
 
-func (t *Torrent) startDownloadWorker(peer peers.Peer, workQueue chan *pieceWork, results chan *pieceResult) {
-	log.Println(peer, "######################33") 
+func (t *Torrent) startDownloader(peer client.Peer, workQueue chan *pieceWork, results chan *pieceResult) {
 	c, err := client.New(peer, t.PeerID, t.InfoHash)
 	if err != nil {
 		log.Printf("Could not handshake with %s. Disconnecting\n", peer.IP)
@@ -219,7 +217,7 @@ func (t *Torrent) Download() error {
 
 	// Start workers
 	for _, peer := range t.Peers {
-		go t.startDownloadWorker(peer, workQueue, results)
+		go t.startDownloader(peer, workQueue, results)
 	}
 
 
